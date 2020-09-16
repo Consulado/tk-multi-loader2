@@ -242,7 +242,7 @@ class MayaActions(HookBaseClass):
 
         # Now create the reference object in Maya.
         nodes = pm.createReference(
-            path, loadReferenceDepth=True, namespace=namespace, returnNewNodes=True
+            path, loadReferenceDepth="all", namespace=namespace, returnNewNodes=True
         )
         # Add the geometries nodes into render group
         for n in nodes:
