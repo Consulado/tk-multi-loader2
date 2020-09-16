@@ -15,7 +15,9 @@ Hook that loads defines all the available actions, broken down by publish type.
 import glob
 import os
 import re
+from pprint import pprint
 import maya.cmds as cmds
+import pymel.core as pm
 import maya.mel as mel
 import sgtk
 
@@ -154,11 +156,21 @@ class MayaActions(HookBaseClass):
 
         :param list actions: Action dictionaries.
         """
+        actions_result = {}
         for single_action in actions:
             name = single_action["name"]
             sg_publish_data = single_action["sg_publish_data"]
             params = single_action["params"]
-            self.execute_action(name, params, sg_publish_data)
+            res = self.execute_action(name, params, sg_publish_data)
+
+            if res is None:
+                continue
+
+            if not actions_result.get(name):
+                actions_result[name] = [res]
+            else:
+                actions_result[name].append(res)
+        pprint(actions_result)
 
     def execute_action(self, name, params, sg_publish_data):
         """
@@ -181,11 +193,12 @@ class MayaActions(HookBaseClass):
         # so convert the path to ensure filenames containing complex characters are supported
         path = six.ensure_str(self.get_publish_path(sg_publish_data))
 
+        asset_data = None
         if name == "reference":
-            self._create_reference(path, sg_publish_data)
+            asset_data = self._create_reference(path, sg_publish_data)
 
         if name == "import":
-            self._do_import(path, sg_publish_data)
+            asset_data = self._do_import(path, sg_publish_data)
 
         if name == "texture_node":
             self._create_texture_node(path, sg_publish_data)
@@ -195,6 +208,8 @@ class MayaActions(HookBaseClass):
 
         if name == "image_plane":
             self._create_image_plane(path, sg_publish_data)
+
+        return asset_data
 
     ##############################################################################################################
     # helper methods which can be subclassed in custom hooks to fine tune the behaviour of things
@@ -212,20 +227,27 @@ class MayaActions(HookBaseClass):
 
         # make a name space out of entity name + publish name
         # e.g. bunny_upperbody
-        namespace = "%s %s" % (
-            sg_publish_data.get("entity").get("name"),
-            sg_publish_data.get("name"),
-        )
-        namespace = namespace.replace(" ", "_")
+        # namespace = "%s %s" % (
+        #     sg_publish_data.get("entity").get("name"),
+        #     sg_publish_data.get("name"),
+        # )
+        # namespace = namespace.replace(" ", "_")
+        namespace = sg_publish_data.get("name", "").replace(" ", "_")
+
+        # Create a default group
+        asset_group = pm.group(sg_publish_data.get("name"))
+        render_group = pm.group("render")
+        pm.parent(render_group, asset_group)
 
         # Now create the reference object in Maya.
-        cmds.file(
-            path,
-            reference=True,
-            loadReferenceDepth="all",
-            mergeNamespacesOnClash=False,
-            namespace=namespace,
+        nodes = pm.createReference(
+            path, loadReferenceDepth=True, namespace=namespace, returnNewNodes=True
         )
+        # Add the geometries nodes into render group
+        for n in nodes:
+            pm.parent(n, render_group)
+
+        return nodes
 
     def _do_import(self, path, sg_publish_data):
         """
@@ -240,21 +262,32 @@ class MayaActions(HookBaseClass):
 
         # make a name space out of entity name + publish name
         # e.g. bunny_upperbody
-        namespace = "%s %s" % (
-            sg_publish_data.get("entity").get("name"),
-            sg_publish_data.get("name"),
-        )
-        namespace = namespace.replace(" ", "_")
+        # namespace = "%s %s" % (
+        #     sg_publish_data.get("entity").get("name"),
+        #     sg_publish_data.get("name"),
+        # )
+        namespace = sg_publish_data.get("name", "").replace(" ", "_")
+        # namespace = namespace.replace(" ", "_")
 
         # perform a more or less standard maya import, putting all nodes brought in into a specific namespace
-        cmds.file(
-            path,
-            i=True,
-            renameAll=True,
-            namespace=namespace,
-            loadReferenceDepth="all",
-            preserveReferences=True,
-        )
+        # cmds.file(
+        #     path,
+        #     i=True,
+        #     renameAll=True,
+        #     namespace=namespace,
+        #     loadReferenceDepth="all",
+        #     preserveReferences=True,
+        # )
+        # Create a default group
+        asset_group = pm.group(sg_publish_data.get("name"))
+        render_group = pm.group("render")
+        pm.parent(render_group, asset_group)
+
+        nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
+        for n in nodes:
+            pm.parent(n, render_group)
+
+        return nodes
 
     def _create_texture_node(self, path, sg_publish_data):
         """
