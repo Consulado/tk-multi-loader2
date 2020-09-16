@@ -235,8 +235,9 @@ class MayaActions(HookBaseClass):
         namespace = sg_publish_data.get("name", "").replace(" ", "_")
 
         # Create a default group
-        asset_group = pm.group(sg_publish_data.get("name"))
-        render_group = pm.group("render")
+        asset_name = sg_publish_data.get("name", "").split(".")[0]
+        asset_group = pm.group(name=asset_name, empty=True)
+        render_group = pm.group(name="render", empty=True)
         pm.parent(render_group, asset_group)
 
         # Now create the reference object in Maya.
@@ -279,8 +280,9 @@ class MayaActions(HookBaseClass):
         #     preserveReferences=True,
         # )
         # Create a default group
-        asset_group = pm.group(sg_publish_data.get("name"))
-        render_group = pm.group("render")
+        asset_name = sg_publish_data.get("name", "").split(".")[0]
+        asset_group = pm.group(name=asset_name, empty=True)
+        render_group = pm.group(name="render", empty=True)
         pm.parent(render_group, asset_group)
 
         nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
