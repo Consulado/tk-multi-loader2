@@ -172,12 +172,16 @@ class MayaActions(HookBaseClass):
             else:
                 actions_result[name].append(res)
 
-        self._check_and_import_shaders(actions_result)
+        if actions_result:
+            self._check_and_import_shaders(actions_result)
 
     def _check_and_import_shaders(self, data):
         engine = sgtk.platform.current_engine()
         sg = engine.shotgun
         context = engine.context
+
+        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
+            return
 
         tk_consuladoutils = self.load_framework("tk-framework-consuladoutils_v0.x.x")
         consulado_globals = tk_consuladoutils.import_module("shotgun_globals")
@@ -251,11 +255,10 @@ class MayaActions(HookBaseClass):
                             continue
                         path_data = last_publish.path
                         pprint(path_data)
-                        local_path = (
+                        local_path = "{}.ma".format(
                             path_data.get(
                                 "local_path_{}".format(platform.system().lower()), ""
                             )
-                            + ".ma"
                         )
                         if local_path == ".ma":
                             continue
@@ -310,6 +313,14 @@ class MayaActions(HookBaseClass):
     ##############################################################################################################
     # helper methods which can be subclassed in custom hooks to fine tune the behaviour of things
 
+    @staticmethod
+    def _context_type_is(t):
+        return sgtk.current_engine().context.entity.get("type", "") == t
+
+    @staticmethod
+    def _step_name_in(steps):
+        return sgtk.current_engine().context.step.get("name", "").lower() in steps
+
     def _create_reference(self, path, sg_publish_data):
         """
         Create a reference with the same settings Maya would use
@@ -340,6 +351,9 @@ class MayaActions(HookBaseClass):
         nodes = pm.createReference(
             path, loadReferenceDepth="all", namespace=namespace, returnNewNodes=True
         )
+
+        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
+            return nodes
 
         # Add the geometries nodes into render group
         for n in nodes:
@@ -385,6 +399,10 @@ class MayaActions(HookBaseClass):
         pm.parent(render_group, asset_group)
 
         nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
+
+        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
+            return nodes
+
         for n in nodes:
             if n.nodeType() not in ("transform"):
                 continue
