@@ -20,6 +20,7 @@ import maya.cmds as cmds
 import pymel.core as pm
 import maya.mel as mel
 import sgtk
+import platform
 
 from tank_vendor import six
 
@@ -170,7 +171,102 @@ class MayaActions(HookBaseClass):
                 actions_result[name] = [res]
             else:
                 actions_result[name].append(res)
-        pprint(actions_result)
+
+        self._check_and_import_shaders(actions_result)
+
+    def _check_and_import_shaders(self, data):
+        engine = sgtk.platform.current_engine()
+        sg = engine.shotgun
+        context = engine.context
+
+        tk_consuladoutils = self.load_framework("tk-framework-consuladoutils_v0.x.x")
+        consulado_globals = tk_consuladoutils.import_module("shotgun_globals")
+        maya_utils = tk_consuladoutils.import_module("maya_utils")
+        consulado_model = tk_consuladoutils.import_module("shotgun_model")
+
+        sg_node_name = consulado_globals.get_custom_entity_by_alias("node")
+        sg_node_type_name = consulado_globals.get_custom_entity_by_alias("node_type")
+        node_x_node = "custom_entity05_sg_upstream_node_dependency_custom_entity05s"
+        node_fields = [
+            "project",
+            "id",
+            "code",
+            "sg_link",
+            "sg_node_type",
+            "sg_downstream_node_dependency",
+            "sg_upstream_node_dependency",
+            "sg_published_files",
+            node_x_node,
+        ]
+        publish_fields = [
+            "project",
+            "id",
+            "entity",
+            "published_file_type",
+            "version_number",
+            "path",
+        ]
+        local_data = {}
+        for action, asset_result in data.items():
+            for asset in asset_result:
+                Nodes = consulado_model.EntityIter(
+                    sg_node_name, node_fields, context, sg
+                )
+                published_files = consulado_model.EntityIter(
+                    "PublishedFile", publish_fields, context, sg
+                )
+                geos = [t for t in asset if t.nodeType() in ("transform")]
+                maya_asset = maya_utils.MayaAsset(geos)
+
+                for geo_node in maya_asset:
+                    c_id = geo_node.cNodeId.get()
+                    node = Nodes.add_new_entity()
+                    node.id = c_id
+                    node.entity_filter = [["id", "is", node.id]]
+                    node.load()
+
+                    upstreams = getattr(node, node_x_node)
+                    if not upstreams:
+                        continue
+
+                    last_publish = None
+                    for con in upstreams:
+                        entity_filter = [
+                            ["entity", "is", con],
+                            [
+                                "published_file_type",
+                                "is",
+                                {"type": "PublishedFileType", "id": 135},
+                            ],
+                        ]
+                        published_files.load(entity_filter)
+                        for publish in published_files:
+                            if (
+                                last_publish is None
+                                or last_publish.version_number < publish.version_number
+                            ):
+                                last_publish = publish
+                                continue
+                        if last_publish is None:
+                            continue
+                        path_data = last_publish.path
+                        pprint(path_data)
+                        local_path = (
+                            path_data.get(
+                                "local_path_{}".format(platform.system().lower()), ""
+                            )
+                            + ".ma"
+                        )
+                        if local_path == ".ma":
+                            continue
+
+                        if local_data.get(local_path) is None:
+                            local_data[local_path] = []
+
+                        local_data[local_path].append(geo_node)
+
+        with maya_utils.ShaderIter(local_data=local_data) as shader_iter:
+            shader_iter.apply()
 
     def execute_action(self, name, params, sg_publish_data):
         """
@@ -244,9 +340,12 @@ class MayaActions(HookBaseClass):
         nodes = pm.createReference(
             path, loadReferenceDepth="all", namespace=namespace, returnNewNodes=True
         )
+
         # Add the geometries nodes into render group
         for n in nodes:
-            pm.parent(n, render_group)
+            if n.nodeType() not in ("transform"):
+                continue
+            n.setParent(render_group)
 
         return nodes
 
@@ -287,6 +386,8 @@ class MayaActions(HookBaseClass):
 
         nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
         for n in nodes:
+            if n.nodeType() not in ("transform"):
+                continue
             pm.parent(n, render_group)
 
         return nodes
