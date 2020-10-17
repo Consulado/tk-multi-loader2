@@ -315,11 +315,15 @@ class MayaActions(HookBaseClass):
 
     @staticmethod
     def _context_type_is(t):
-        return sgtk.current_engine().context.entity.get("type", "") == t
+        engine = sgtk.platform.current_engine()
+        context = engine.context
+        return context.entity.get("type", "") == t
 
     @staticmethod
     def _step_name_in(steps):
-        return sgtk.current_engine().context.step.get("name", "").lower() in steps
+        engine = sgtk.platform.current_engine()
+        context = engine.context
+        return context.step.get("name", "").lower() in steps
 
     def _create_reference(self, path, sg_publish_data):
         """
