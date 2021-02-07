@@ -333,6 +333,7 @@ class MayaActions(HookBaseClass):
         :param path: Path to file.
         :param sg_publish_data: Shotgun data dictionary with all the standard publish fields.
         """
+        app = self.parent
         if not os.path.exists(path):
             raise Exception("File not found on disk - '%s'" % path)
 
@@ -345,25 +346,31 @@ class MayaActions(HookBaseClass):
         # namespace = namespace.replace(" ", "_")
         namespace = sg_publish_data.get("name", "").replace(" ", "_")
 
-        # Create a default group
-        asset_name = sg_publish_data.get("name", "").split(".")[0]
-        asset_group = pm.group(name=asset_name, empty=True)
-        render_group = pm.group(name="render", empty=True)
-        pm.parent(render_group, asset_group)
-
         # Now create the reference object in Maya.
         nodes = pm.createReference(
             path, loadReferenceDepth="all", namespace=namespace, returnNewNodes=True
         )
 
-        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
+        if not self._context_type_is("Shot") and not self._step_name_in(["lighting"]):
             return nodes
+
+        # Create a default group
+        asset_name = sg_publish_data.get("name", "").split(".")[0]
+        asset_group = pm.group(name=asset_name, empty=True)
+        render_group = pm.group(name="render", empty=True)
+        asset_group.setParent(render_group)
 
         # Add the geometries nodes into render group
         for n in nodes:
-            if n.nodeType() not in ("transform"):
+            try:
+                if n.nodeType() not in ("transform"):
+                    continue
+                n.setParent(render_group)
+            except Exception as e:
+                app.logger.warning(
+                    "Unable to set up de the parent node, error: {}".format(e)
+                )
                 continue
-            n.setParent(render_group)
 
         return nodes
 
@@ -375,6 +382,7 @@ class MayaActions(HookBaseClass):
         :param path: Path to file.
         :param sg_publish_data: Shotgun data dictionary with all the standard publish fields.
         """
+        app = self.parent
         if not os.path.exists(path):
             raise Exception("File not found on disk - '%s'" % path)
 
@@ -400,7 +408,7 @@ class MayaActions(HookBaseClass):
         asset_name = sg_publish_data.get("name", "").split(".")[0]
         asset_group = pm.group(name=asset_name, empty=True)
         render_group = pm.group(name="render", empty=True)
-        pm.parent(render_group, asset_group)
+        asset_group.setParent(render_group)
 
         nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
 
@@ -408,9 +416,15 @@ class MayaActions(HookBaseClass):
             return nodes
 
         for n in nodes:
-            if n.nodeType() not in ("transform"):
+            try:
+                if n.nodeType() not in ("transform"):
+                    continue
+                n.setParent(render_group)
+            except Exception as e:
+                app.logger.warning(
+                    "Unable to set up de the parent node, error: {}".format(e)
+                )
                 continue
-            pm.parent(n, render_group)
 
         return nodes
 
