@@ -172,9 +172,7 @@ class MayaActions(HookBaseClass):
             else:
                 actions_result[name].append(res)
 
-        if actions_result and (
-            self._context_type_is("Shot") and self._step_name_in(["lighting"])
-        ):
+        if actions_result and self._step_name_in(["lighting"]):
             self._check_and_import_shaders(actions_result)
 
     def _check_and_import_shaders(self, data):
@@ -353,26 +351,24 @@ class MayaActions(HookBaseClass):
             path, loadReferenceDepth="all", namespace=namespace, returnNewNodes=True
         )
 
-        if not self._context_type_is("Shot") and not self._step_name_in(["lighting"]):
-            return nodes
+        if self._step_name_in(["lighting"]):
+            # Create a default group
+            asset_name = sg_publish_data.get("name", "").split(".")[0]
+            asset_group = pm.group(name=asset_name, empty=True)
+            render_group = pm.group(name="render", empty=True)
+            asset_group.setParent(render_group)
 
-        # Create a default group
-        asset_name = sg_publish_data.get("name", "").split(".")[0]
-        asset_group = pm.group(name=asset_name, empty=True)
-        render_group = pm.group(name="render", empty=True)
-        asset_group.setParent(render_group)
-
-        # Add the geometries nodes into render group
-        for n in nodes:
-            try:
-                if n.nodeType() not in ("transform"):
+            # Add the geometries nodes into render group
+            for n in nodes:
+                try:
+                    if n.nodeType() not in ("transform"):
+                        continue
+                    n.setParent(render_group)
+                except Exception as e:
+                    app.logger.warning(
+                        "Unable to set up de the parent node, error: {}".format(e)
+                    )
                     continue
-                n.setParent(render_group)
-            except Exception as e:
-                app.logger.warning(
-                    "Unable to set up de the parent node, error: {}".format(e)
-                )
-                continue
 
         return nodes
 
@@ -409,25 +405,23 @@ class MayaActions(HookBaseClass):
 
         nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
 
-        if not self._context_type_is("Shot") and not self._step_name_in(["lighting"]):
-            return nodes
+        if self._step_name_in(["lighting"]):
+            # Create a default group
+            asset_name = sg_publish_data.get("name", "").split(".")[0]
+            asset_group = pm.group(name=asset_name, empty=True)
+            render_group = pm.group(name="render", empty=True)
+            asset_group.setParent(render_group)
 
-        # Create a default group
-        asset_name = sg_publish_data.get("name", "").split(".")[0]
-        asset_group = pm.group(name=asset_name, empty=True)
-        render_group = pm.group(name="render", empty=True)
-        asset_group.setParent(render_group)
-
-        for n in nodes:
-            try:
-                if n.nodeType() not in ("transform"):
+            for n in nodes:
+                try:
+                    if n.nodeType() not in ("transform"):
+                        continue
+                    n.setParent(render_group)
+                except Exception as e:
+                    app.logger.warning(
+                        "Unable to set up de the parent node, error: {}".format(e)
+                    )
                     continue
-                n.setParent(render_group)
-            except Exception as e:
-                app.logger.warning(
-                    "Unable to set up de the parent node, error: {}".format(e)
-                )
-                continue
 
         return nodes
 
