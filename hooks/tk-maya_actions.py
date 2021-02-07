@@ -172,7 +172,9 @@ class MayaActions(HookBaseClass):
             else:
                 actions_result[name].append(res)
 
-        if actions_result:
+        if actions_result and (
+            self._context_type_is("Shot") and self._step_name_in(["lighting"])
+        ):
             self._check_and_import_shaders(actions_result)
 
     def _check_and_import_shaders(self, data):
@@ -180,7 +182,7 @@ class MayaActions(HookBaseClass):
         sg = engine.shotgun
         context = engine.context
 
-        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
+        if not self._context_type_is("Shot") and not self._step_name_in(["lighting"]):
             return
 
         tk_consuladoutils = self.load_framework("tk-framework-consuladoutils_v0.x.x")
