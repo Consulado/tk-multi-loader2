@@ -404,16 +404,17 @@ class MayaActions(HookBaseClass):
         #     loadReferenceDepth="all",
         #     preserveReferences=True,
         # )
+
+        nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
+
+        if not self._context_type_is("Shot") and not self._step_name_in(["lighting"]):
+            return nodes
+
         # Create a default group
         asset_name = sg_publish_data.get("name", "").split(".")[0]
         asset_group = pm.group(name=asset_name, empty=True)
         render_group = pm.group(name="render", empty=True)
         asset_group.setParent(render_group)
-
-        nodes = pm.importFile(path, loadReferenceDepth="all", returnNewNodes=True)
-
-        if not self._context_type_is("Shot") and self._step_name_in(["lighting"]):
-            return nodes
 
         for n in nodes:
             try:
